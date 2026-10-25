@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+  workflow_call:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  ci:
+    uses: rarebit-one/.github/.github/workflows/reusable-gem-ci.yml@v2
+    with:
+      ruby-versions: '["4.0.0","4.0.1","4.0.2","4.0.3","4.0.4"]'
+      # Newest pagy (Gemfile.lock), then the oldest a consumer runs.
+      test-command: |
+        bundle exec rspec
+        BUNDLE_GEMFILE=gemfiles/pagy-43.6.gemfile bundle install
+        BUNDLE_GEMFILE=gemfiles/pagy-43.6.gemfile bundle exec rspec
+      extra-lint-commands: |
+        bundle exec brakeman --no-pager --force
+        bundle exec bundler-audit --update

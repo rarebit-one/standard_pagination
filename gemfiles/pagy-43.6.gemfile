@@ -1,0 +1,8 @@
+# The oldest pagy a consumer runs (luminality-web). CI runs the suite against
+# it as well as the main lockfile's newest pagy, because 43.6 and 43.7+ read
+# the client page size from different options.
+#
+#   BUNDLE_GEMFILE=gemfiles/pagy-43.6.gemfile bundle exec rspec
+eval_gemfile "../Gemfile"
+
+gem "pagy", "~> 43.6.0"
