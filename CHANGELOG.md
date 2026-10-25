@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.1] - 2026-10-25
 
+### Added
+- `config.limit_key` accepts an Array of aliases, e.g. `%w[limit per_page]`; the first one the request sends wins. For APIs whose clients use both (luminality-web). The out-of-range redirect drops all of them.
+
 ### Fixed
 - `Controller#paginate` raised `NoMethodError` (`select_values` for Array) when given an in-memory Array, such as an assembled audit timeline. The inline-DISTINCT count check added late in 0.1.0 assumed an ActiveRecord relation. Arrays paginate again, and a spec covers them. Found while adopting the gem in fundbright-web.
 

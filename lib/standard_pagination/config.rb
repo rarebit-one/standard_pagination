@@ -4,7 +4,8 @@ module StandardPagination
     attr_accessor :default_limit
     # Largest page size a client may request when client limits are on.
     attr_accessor :max_limit
-    # Request param a client sets the page size with (when allowed).
+    # Request param a client sets the page size with (when allowed). An Array
+    # accepts aliases; the first one the request sends wins.
     attr_accessor :limit_key
     # Formats for which `paginate` honours the client's page size by default.
     # HTML pages keep the size the call site chose.
