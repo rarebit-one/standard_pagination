@@ -1,0 +1,160 @@
+#!/bin/bash
+# Enforce signed commits hook for Claude Code
+#
+# Runs on PreToolUse event for Bash commands containing "git commit"
+# Automatically injects the -S flag to ensure all commits are GPG/SSH signed
+#
+# What it does:
+#   1. Detects git commit commands (but not git commit-msg, git commit-tree, etc.)
+#   2. Verifies git signing is configured
+#   3. Checks if -S or --gpg-sign is already present
+#   4. If not, modifies the command to add -S flag
+#   5. Returns updated command via JSON output
+#
+# Exit codes:
+#   0 - allow (command signed via updatedInput, or passed through unchanged)
+#   2 - block (an explicit signing bypass)
+#
+# To skip this hook (a human decision; agents need the user's approval):
+#   - Export SKIP_SIGNED_COMMITS_HOOK=1 in your own shell (an inline prefix no longer works)
+#
+# Signing bypasses are BLOCKED (exit 2), not opt-outs: `--no-gpg-sign` and
+# `-c commit.gpgsign=false|0|no|off`. Workspace rule: never use them; a human
+# who truly needs an unsigned commit runs it in their own terminal.
+#
+# Requirements:
+#   - GPG or SSH signing must be configured in git
+#   - Both methods require user.signingkey to be set
+#   - For GPG: git config --get user.signingkey (returns GPG key ID)
+#   - For SSH: git config --get gpg.format (returns 'ssh') AND
+#              git config --get user.signingkey (returns path like ~/.ssh/id_ed25519.pub)
+#
+# Note: This hook modifies the command before execution using updatedInput.
+#       It signs ordinary commits and blocks the explicit signing bypasses.
+
+set -e
+
+# Require jq for JSON parsing — fail open (exit 0) if missing so Bash tool use
+# isn't blocked by infra gaps. The hook simply won't auto-sign; commits still
+# pass through to git, which has its own commit.gpgsign settings.
+if ! command -v jq &>/dev/null; then
+  echo "❌ enforce-signed-commits hook requires 'jq'. Install it and retry." >&2
+  exit 0
+fi
+
+# Read tool input from stdin. The `|| exit 0` makes the "exit 0 always"
+# contract honest even with set -e — if stdin is malformed (shouldn't happen
+# in normal Claude Code operation but possible under manual invocation),
+# we no-op instead of blocking the Bash tool.
+INPUT=$(cat)
+COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""') || exit 0
+
+# Only process "git commit" commands (with word boundaries), including the forms
+# with global options in between: `git -C DIR commit`, `git -c key=val commit`.
+# This matches: git commit, git commit -m, git -c x=y commit, etc.
+# But NOT: git commit-msg, git commit-tree
+# Global options before the subcommand: -c/-C and the long options that take a
+# separate argument, or any other -x / --opt[=value] (e.g. --no-pager, -P).
+GIT_GLOBAL_OPTS='([[:space:]]+(-[cC]|--git-dir|--work-tree|--namespace|--exec-path|--config-env)[[:space:]]+[^[:space:]]+|[[:space:]]+--?[A-Za-z][-A-Za-z0-9]*(=[^[:space:]]+)?)*'
+GIT_COMMIT_RE="(^|[[:space:]&;|])git${GIT_GLOBAL_OPTS}[[:space:]]+commit([[:space:]]|\$)"
+if [[ ! "$COMMAND" =~ $GIT_COMMIT_RE ]]; then
+  exit 0
+fi
+
+# Only an EXPORTED SKIP_SIGNED_COMMITS_HOOK=1 skips the hook: that has to be set
+# in a human's shell before the session starts. An inline prefix
+# (`SKIP_SIGNED_COMMITS_HOOK=1 git commit …`) is something an agent can type, so it
+# no longer skips; the commit is signed and checked like any other.
+if [[ "${SKIP_SIGNED_COMMITS_HOOK:-}" == "1" ]]; then
+  echo "⏭️  Signed commits hook skipped (SKIP_SIGNED_COMMITS_HOOK=1)" >&2
+  exit 0
+fi
+
+# Skip in CI environments - CI may have different signing requirements
+if [[ "${CI:-}" == "true" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+  exit 0
+fi
+
+# Block the explicit signing bypasses (checked before the signing-key check, so
+# they are refused even where signing isn't configured). Word boundaries match
+# the flag, not the same text inside a quoted commit message.
+# Scan the RAW command, deliberately. This is a best-effort guard: no text scan
+# can be complete (variables, eval, aliases and scripts all hide a flag), and
+# every attempt to skip "message text" (heredoc bodies, -m arguments) opened a
+# bypass (review rounds 2-3: $(cat <<EOF …), multi-line -m, stray <<EOF). So it
+# errs toward BLOCKING: a commit whose message merely mentions a bypass flag is
+# refused, and the message says to rephrase. The authoritative controls are the
+# home deny list and the server-side signature requirement.
+SCAN="$COMMAND"
+REPHRASE="   (If the flag only appears in your commit message, rephrase the message.)"
+
+if printf '%s' "$SCAN" | grep -qE -- '(^|[[:space:]])--no-gpg-sign([[:space:]]|$)'; then
+  echo "❌ Signing bypass blocked: remove --no-gpg-sign. Commits here must be signed;" >&2
+  echo "   if signing fails, stop and surface the error instead." >&2
+  echo "$REPHRASE" >&2
+  exit 2
+fi
+if printf '%s' "$SCAN" | grep -qiE -- "(^|[[:space:]])-c[[:space:]]*['\"]?commit\\.gpgsign=['\"]?(false|0|no|off)['\"]?([[:space:]]|\$)"; then
+  echo "❌ Signing bypass blocked: remove -c commit.gpgsign=... Commits here must be signed;" >&2
+  echo "   if signing fails, stop and surface the error instead." >&2
+  echo "$REPHRASE" >&2
+  exit 2
+fi
+
+# The same setting through git's environment: GIT_CONFIG_KEY_n=commit.gpgsign with
+# a false-ish GIT_CONFIG_VALUE_n, or GIT_CONFIG_PARAMETERS carrying it.
+if printf '%s' "$SCAN" | grep -qiE -- "GIT_CONFIG_KEY_[0-9]+=['\"]?commit\\.gpgsign" \
+   && printf '%s' "$SCAN" | grep -qiE -- "GIT_CONFIG_VALUE_[0-9]+=['\"]?(false|0|no|off)"; then
+  echo "❌ Signing bypass blocked: GIT_CONFIG_KEY_n=commit.gpgsign disables signing." >&2
+  echo "$REPHRASE" >&2
+  exit 2
+fi
+if printf '%s' "$SCAN" | grep -qiE -- "GIT_CONFIG_PARAMETERS=.*commit\\.gpgsign'?=['\"]?'?(false|0|no|off)"; then
+  echo "❌ Signing bypass blocked: GIT_CONFIG_PARAMETERS disables commit.gpgsign." >&2
+  echo "$REPHRASE" >&2
+  exit 2
+fi
+
+# Verify signing is configured before injecting -S
+# Both GPG and SSH signing require user.signingkey to be set
+if ! git config --get user.signingkey >/dev/null 2>&1; then
+  echo "⚠️  Git signing not configured (user.signingkey not set). Skipping auto-sign." >&2
+  echo "   For GPG: git config --global user.signingkey <key-id>" >&2
+  echo "   For SSH: git config --global gpg.format ssh && git config --global user.signingkey ~/.ssh/id_ed25519.pub" >&2
+  exit 0
+fi
+
+
+# Note: We intentionally don't check for existing -S/--gpg-sign flags.
+# Reason: Detecting flags vs text in quoted strings is error-prone.
+# Git handles duplicate -S flags gracefully (signs once), so it's safer
+# to always inject -S than to risk missing an unsigned commit.
+
+# Inject -S flag into the git commit command
+# Handle various command patterns:
+#   git commit -m "msg"        -> git commit -S -m "msg"
+#   git commit --amend         -> git commit -S --amend
+#   git commit                 -> git commit -S
+#   git commit --fixup=HEAD    -> git commit -S --fixup=HEAD
+#   git commit --squash=abc    -> git commit -S --squash=abc
+#
+# We insert -S right after "git commit" to ensure proper flag ordering
+# Using printf for safer interpolation (avoids issues with special characters)
+MODIFIED_COMMAND=$(printf '%s' "$COMMAND" | sed -E "s/(git${GIT_GLOBAL_OPTS}[[:space:]]+commit)([[:space:]]|\$)/\\1 -S\\5/")
+
+echo "🔐 Auto-signing commit (added -S flag)" >&2
+
+# Return JSON with updated command
+# This tells Claude Code to use the modified command instead
+jq -n \
+  --arg cmd "$MODIFIED_COMMAND" \
+  '{
+    "hookSpecificOutput": {
+      "hookEventName": "PreToolUse",
+      "updatedInput": {
+        "command": $cmd
+      }
+    }
+  }'
+
+exit 0

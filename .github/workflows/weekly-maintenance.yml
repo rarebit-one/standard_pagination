@@ -1,0 +1,29 @@
+name: Weekly Maintenance
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+concurrency:
+  group: weekly-maintenance-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+  security-events: read
+
+jobs:
+  maintenance:
+    uses: rarebit-one/.github/.github/workflows/reusable-weekly-maintenance.yml@7891664c77dc04e71d16b968a5b8f9881a83942b # main @ 2026-10-01 (.github#148/#149: claude-sonnet-5-5, claude-code-action v1.0.236)
+    with:
+      stack: ruby-gem
+      lint-commands: |
+        bundle exec rubocop
+      test-commands: |
+        bundle exec rspec
+    secrets:
+      claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
