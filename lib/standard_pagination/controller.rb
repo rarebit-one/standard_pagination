@@ -96,10 +96,16 @@ module StandardPagination
       cap = pagination_client_limit_cap(client_limit)
       return limit unless cap
 
-      requested = params[StandardPagination.config.limit_key].to_s
+      # The first configured key the request sends wins.
+      key = pagination_limit_keys.find { |candidate| params[candidate].present? }
+      requested = key ? params[key].to_s : ""
       return limit unless requested.match?(/\A\d+\z/) && requested.to_i.positive?
 
       [ requested.to_i, cap ].min
+    end
+
+    def pagination_limit_keys
+      Array(StandardPagination.config.limit_key).map(&:to_s)
     end
 
     def pagination_client_limit_cap(client_limit)
@@ -144,7 +150,7 @@ module StandardPagination
       if last_page
         query[page_key] = last_page
       else
-        query = query.except((options[:limit_key] || Pagy::DEFAULT[:limit_key]).to_s, StandardPagination.config.limit_key)
+        query = query.except((options[:limit_key] || Pagy::DEFAULT[:limit_key]).to_s, *pagination_limit_keys)
         # Nothing left to drop: the bad option came from the call site or a
         # param this gem doesn't know, so redirecting would only repeat it.
         return head(:bad_request) if query == original
