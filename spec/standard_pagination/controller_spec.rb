@@ -63,6 +63,16 @@ RSpec.describe StandardPagination::Controller do
       expect(json["pagination"]["limit"]).to eq(2)
     end
 
+    it "accepts aliases when limit_key is an Array, first one sent winning" do
+      StandardPagination.config.limit_key = %w[limit per_page]
+
+      get "/widgets.json", per_page: 3
+      expect(json["pagination"]["limit"]).to eq(3)
+
+      get "/widgets.json", per_page: 3, limit: 4
+      expect(json["pagination"]["limit"]).to eq(4)
+    end
+
     it "falls back to the call site's limit for a negative or junk page size" do
       get "/widgets.json", limit: -1
       expect(json["pagination"]["limit"]).to eq(2)

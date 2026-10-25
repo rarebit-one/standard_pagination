@@ -45,7 +45,7 @@ Delete `max_limit` (or `client_limit`) from `config/initializers/pagy.rb`. Leave
 StandardPagination.configure do |c|
   c.default_limit = 20            # rows when a call site passes no limit:
   c.max_limit = 100               # cap on a client-chosen page size
-  c.limit_key = "limit"           # param a client sets it with ("per_page" in luminality)
+  c.limit_key = "limit"           # param a client sets it with; an Array accepts aliases, e.g. %w[limit per_page]
   c.client_limit_formats = %i[json]
   c.tiebreak = true
   c.raise_range_error = true
