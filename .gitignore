@@ -1,0 +1,13 @@
+*.gem
+*.rbc
+/.bundle/
+/.yardoc
+/_yardoc/
+/coverage/
+/doc/
+/pkg/
+/spec/reports/
+/tmp/
+/.worktrees/
+/.claude/worktrees/
+.rspec_status
