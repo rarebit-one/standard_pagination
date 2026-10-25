@@ -16,7 +16,8 @@ module StandardPagination
     # - no single-column primary key
     # - already ordered by the primary key
     # - GROUP BY (the key isn't in the group, so Postgres rejects it)
-    # - DISTINCT with a custom SELECT (the key may not be selected)
+    # - DISTINCT with a custom SELECT, including `select("DISTINCT ...")`
+    #   (the key may not be selected)
     # - a custom FROM (the table name may not resolve)
     def apply(relation)
       return relation unless tiebreakable?(relation)
@@ -33,8 +34,14 @@ module StandardPagination
       return false unless relation.klass.primary_key.is_a?(String)
       return false if relation.group_values.any?
       return false if relation.distinct_value && relation.select_values.any?
+      return false if inline_distinct?(relation)
 
       relation.from_clause.empty?
+    end
+
+    # `select("DISTINCT category")` leaves distinct_value unset.
+    def inline_distinct?(relation)
+      relation.select_values.any? { |value| !value.is_a?(Symbol) && value.to_s.match?(/\bdistinct\b/i) }
     end
 
     def ordered_by?(relation, primary_key)

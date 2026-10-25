@@ -146,10 +146,12 @@ module StandardPagination
         return head(:bad_request) if query == original
       end
 
-      # Rebuild the URL from the current route rather than echoing
+      # Rebuild the path from the current route rather than echoing
       # request.path, and refuse other hosts, so the redirect can only ever
-      # land on this app.
-      location = url_for(request.path_parameters.merge(query.symbolize_keys, only_path: true))
+      # land on this app. The query is appended separately: merged into the
+      # url_for options, a ?action= or ?host= param would steer the route.
+      path = url_for(request.path_parameters.merge(only_path: true))
+      location = query.empty? ? path : "#{path}?#{query.to_query}"
       notice = instance_exec(&notice) if notice.respond_to?(:call)
       flash = notice ? { notice: } : {}
       redirect_to(location, allow_other_host: false, **flash)

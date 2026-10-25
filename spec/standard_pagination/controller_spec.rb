@@ -96,6 +96,13 @@ RSpec.describe StandardPagination::Controller do
       expect(last_request.env["rack.session"]["flash"]["flashes"]).to eq("notice" => "Showing the last page")
     end
 
+    it "keeps routing-reserved query params as plain filters" do
+      get "/widgets", page: 99, action: "show", host: "evil.example"
+
+      expect(last_response.status).to eq(302)
+      expect(last_response.location).to eq("http://example.org/widgets?action=show&host=evil.example&page=4")
+    end
+
     it "rebuilds the redirect from the route, so a crafted path stays on-site" do
       # A "//widgets?page=4" Location would be protocol-relative (host
       # "widgets"). Rails 8.1 already squeezes the path before the controller

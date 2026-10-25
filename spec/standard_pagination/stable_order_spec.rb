@@ -24,7 +24,12 @@ RSpec.describe StandardPagination::StableOrder do
   end
 
   it "leaves relations it cannot safely extend alone" do
-    [ Widget.group(:category).order(:category), Widget.select(:category).distinct.order(:category), Widget.from("widgets AS w") ].each do |relation|
+    [
+      Widget.group(:category).order(:category),
+      Widget.select(:category).distinct.order(:category),
+      Widget.select("DISTINCT category").order(:category),
+      Widget.from("widgets AS w")
+    ].each do |relation|
       expect(described_class.apply(relation)).to equal(relation)
     end
   end
