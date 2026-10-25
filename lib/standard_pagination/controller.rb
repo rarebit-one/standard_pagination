@@ -141,9 +141,12 @@ module StandardPagination
         query = query.except((options[:limit_key] || Pagy::DEFAULT[:limit_key]).to_s, StandardPagination.config.limit_key)
       end
 
-      location = query.empty? ? request.path : "#{request.path}?#{query.to_query}"
+      # Rebuild the URL from the current route rather than request.path, so a
+      # crafted path ("//evil.example") can't become an off-site redirect.
+      location = url_for(request.path_parameters.merge(query.symbolize_keys, only_path: true))
       notice = instance_exec(&notice) if notice.respond_to?(:call)
-      notice ? redirect_to(location, notice:) : redirect_to(location)
+      flash = notice ? { notice: } : {}
+      redirect_to(location, allow_other_host: false, **flash)
     end
   end
 end

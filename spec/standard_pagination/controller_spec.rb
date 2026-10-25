@@ -96,6 +96,17 @@ RSpec.describe StandardPagination::Controller do
       expect(last_request.env["rack.session"]["flash"]["flashes"]).to eq("notice" => "Showing the last page")
     end
 
+    it "rebuilds the redirect from the route, so a crafted path stays on-site" do
+      # A "//widgets?page=4" Location would be protocol-relative (host
+      # "widgets"). Rails 8.1 already squeezes the path before the controller
+      # sees it; this pins that the redirect stays on-site regardless.
+      get "/widgets", { page: 99 }, { "PATH_INFO" => "//widgets" }
+
+      expect(last_response.status).to eq(302)
+      expect(URI(last_response.location).host).to eq("example.org")
+      expect(URI(last_response.location).path).to eq("/widgets")
+    end
+
     it "drops the page and limit params for any other bad option, so the redirect can't loop" do
       get "/widgets", size: -1, page: 2, limit: 5, q: "x"
 

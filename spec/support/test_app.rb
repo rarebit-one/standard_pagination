@@ -33,6 +33,8 @@ end
 class WidgetsController < ActionController::Base
   include StandardPagination::Controller
 
+  protect_from_forgery with: :exception
+
   rescue_from StandardError do |error|
     render plain: "catch-all: #{error.class}", status: :internal_server_error
   end
