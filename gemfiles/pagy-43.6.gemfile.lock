@@ -1,7 +1,7 @@
 PATH
   remote: ..
   specs:
-    standard_pagination (0.1.0)
+    standard_pagination (0.1.1)
       actionpack (>= 8.1)
       activerecord (>= 8.1)
       pagy (>= 43.6, < 44)
@@ -316,7 +316,7 @@ CHECKSUMS
   sqlite3 (2.10.1-x86_64-darwin) sha256=00d1cd2e8ecff5ad9fffa0c97de59d4f85c5fc54eada2587d53ca0bd933b7a5d
   sqlite3 (2.10.1-x86_64-linux-gnu) sha256=661ecede31e23a412059cd8c684ed84e332f64f167e4a90902cf99e8ea2c8718
   sqlite3 (2.10.1-x86_64-linux-musl) sha256=67c7c5443a930157b4e148f0f4cb9ab998ee7ecfa8ce56879a6b56d1d742b2be
-  standard_pagination (0.1.0)
+  standard_pagination (0.1.1)
   thor (1.5.0) sha256=e3a9e55fe857e44859ce104a84675ab6e8cd59c650a49106a05f55f136425e73
   timeout (0.6.1) sha256=78f57368a7e7bbadec56971f78a3f5ecbcfb59b7fcbb0a3ed6ddc08a5094accb
   tsort (0.2.0) sha256=9650a793f6859a43b6641671278f79cfead60ac714148aabe4e3f0060480089f

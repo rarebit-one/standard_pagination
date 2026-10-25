@@ -39,8 +39,11 @@ module StandardPagination
       relation.from_clause.empty?
     end
 
-    # `select("DISTINCT category")` leaves distinct_value unset.
+    # `select("DISTINCT category")` leaves distinct_value unset. False for
+    # anything that isn't a relation (arrays, search results).
     def inline_distinct?(relation)
+      return false unless defined?(::ActiveRecord::Relation) && relation.is_a?(::ActiveRecord::Relation)
+
       relation.select_values.any? { |value| !value.is_a?(Symbol) && value.to_s.match?(/\bdistinct\b/i) }
     end
 

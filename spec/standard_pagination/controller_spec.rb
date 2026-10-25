@@ -94,6 +94,13 @@ RSpec.describe StandardPagination::Controller do
       expect(json["categories"]).to eq(%w[x])
       expect(json["pagination"]).to include("count" => 2, "pages" => 2)
     end
+
+    it "paginates an in-memory Array" do
+      get "/widgets/names.json", page: 2
+
+      expect(json["names"]).to eq(%w[c d])
+      expect(json["pagination"]).to include("page" => 2, "count" => 7, "pages" => 4)
+    end
   end
 
   describe ".rescue_pagination_errors" do
