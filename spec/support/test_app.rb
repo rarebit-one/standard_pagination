@@ -56,6 +56,12 @@ class WidgetsController < ActionController::Base
     render json: { categories: widgets.map(&:category), pagination: pagination_data(pagy) }
   end
 
+  def names
+    pagy, names = paginate(Widget.order(:name).pluck(:name), limit: 2)
+
+    render json: { names:, pagination: pagination_data(pagy) }
+  end
+
   private
 
   def client_limit_option
@@ -84,6 +90,7 @@ end
 TestApp.routes.draw do
   resources :widgets, only: :index do
     get :categories, on: :collection
+    get :names, on: :collection
   end
   resources :not_found_widgets, only: :index
   resources :custom_widgets, only: :index
