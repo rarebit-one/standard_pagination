@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `StandardPagination::Controller`, a concern that adds:
   - `paginate`, which wraps `pagy`. HTML pages ignore a client-chosen page size, JSON lets clients choose one up to `config.max_limit`, and the primary key is appended as a tie-breaker. It also neutralises any `max_limit`/`client_limit` left in `Pagy::OPTIONS` for that call.
   - `pagination_data`, which returns the standard `data_hash` keys.
-  - `rescue_pagination_errors(html:, notice:)`: a 400 for JSON; for HTML a redirect that keeps filters and can't loop, a 404, or a custom method. Declaring it again replaces the earlier handler.
+  - `rescue_pagination_errors(html:, notice:)`: a 400 for JSON; for HTML a redirect that keeps filters (and answers 400 rather than redirect to the same failing URL), a 404, or a custom method. Declaring it again replaces the earlier handler.
 - `StandardPagination::Mcp.paginate`, the MCP list helper, which keeps the `page`/`per_page`/`total_count`/`total_pages` shape. A non-positive or junk `per_page` now falls back to the default instead of becoming 1.
 - `StandardPagination::StableOrder` and `StandardPagination::Model#stable_order`.
 - A Railtie boot check for leftover client-limit options in `Pagy::OPTIONS`.

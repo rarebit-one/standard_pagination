@@ -87,7 +87,7 @@ pagy_done, done_apps = paginate(done_scope, page_key: "done_page")
 | Request | Out-of-range page | Any other bad option |
 |---|---|---|
 | JSON | 400 `{ error: "Page out of range", last_page: 4 }` | 400 `{ error: "Invalid pagination parameters", last_page: null }` |
-| HTML, `html: :redirect` | Redirects to the last page, keeping every other param | Redirects without the page and limit params, so it can't loop |
+| HTML, `html: :redirect` | Redirects to the last page, keeping every other param | Redirects without the page and limit params; 400 if there are none to drop |
 | HTML, `html: :not_found` | 404 | 404 |
 | HTML, `html: :my_method` | Calls `my_method(exception)` | Calls `my_method(exception)` |
 

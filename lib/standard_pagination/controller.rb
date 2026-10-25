@@ -31,7 +31,8 @@ module StandardPagination
       #
       # - `:redirect` redirects to the last page, keeping every other query
       #   param so filters survive. For a bad option other than the page, it
-      #   drops the page and limit params instead, so the redirect can't loop.
+      #   drops the page and limit params instead; if there are none to drop,
+      #   it responds 400 rather than redirect to the same failing URL.
       # - `:not_found` responds 404 with an empty body.
       # - a Symbol naming a controller method calls it with the exception,
       #   e.g. `html: :render_not_found` for an app's own 404 page.
@@ -133,16 +134,21 @@ module StandardPagination
     def redirect_after_pagination_error(exception, last_page, notice)
       options = exception.pagy&.options || {}
       page_key = (options[:page_key] || Pagy::DEFAULT[:page_key]).to_s
-      query = request.query_parameters.except(page_key)
+      original = request.query_parameters
+      query = original.except(page_key)
 
       if last_page
         query[page_key] = last_page
       else
         query = query.except((options[:limit_key] || Pagy::DEFAULT[:limit_key]).to_s, StandardPagination.config.limit_key)
+        # Nothing left to drop: the bad option came from the call site or a
+        # param this gem doesn't know, so redirecting would only repeat it.
+        return head(:bad_request) if query == original
       end
 
-      # Rebuild the URL from the current route rather than request.path, so a
-      # crafted path ("//evil.example") can't become an off-site redirect.
+      # Rebuild the URL from the current route rather than echoing
+      # request.path, and refuse other hosts, so the redirect can only ever
+      # land on this app.
       location = url_for(request.path_parameters.merge(query.symbolize_keys, only_path: true))
       notice = instance_exec(&notice) if notice.respond_to?(:call)
       flash = notice ? { notice: } : {}

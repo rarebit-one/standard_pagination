@@ -107,11 +107,18 @@ RSpec.describe StandardPagination::Controller do
       expect(URI(last_response.location).path).to eq("/widgets")
     end
 
-    it "drops the page and limit params for any other bad option, so the redirect can't loop" do
+    it "drops the page and limit params for any other bad option" do
       get "/widgets", size: -1, page: 2, limit: 5, q: "x"
 
       expect(last_response.status).to eq(302)
       expect(last_response.location).to end_with("/widgets?q=x&size=-1")
+    end
+
+    it "stops with a 400 instead of looping when dropping them can't fix the request" do
+      get "/widgets", size: -1, page: 2, q: "x"
+      follow_redirect!
+
+      expect(last_response.status).to eq(400)
     end
 
     it "returns 400 with a null last_page for any other bad option in JSON" do
