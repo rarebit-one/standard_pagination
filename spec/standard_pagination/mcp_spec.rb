@@ -32,6 +32,13 @@ RSpec.describe StandardPagination::Mcp do
     expect(meta).to include(total_count: 2, total_pages: 2)
   end
 
+  it "counts the distinct rows for an inline DISTINCT projection" do
+    records, meta = described_class.paginate(Widget.select("DISTINCT category").order(:category), per_page: 1)
+
+    expect(records.map(&:category)).to eq(%w[high])
+    expect(meta).to include(total_count: 2, total_pages: 2)
+  end
+
   it "breaks ties unless tiebreak: false" do
     records, = described_class.paginate(Widget.order(rank: :desc), per_page: 5)
     expect(records.map(&:name)).to eq(%w[e d c b a])

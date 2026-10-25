@@ -85,6 +85,15 @@ RSpec.describe StandardPagination::Controller do
 
       expect(last_response.body.split(",").size).to eq(2)
     end
+
+    it "counts the distinct rows for an inline DISTINCT projection" do
+      Widget.update_all(category: "x")
+      Widget.first.update!(category: "y")
+      get "/widgets/categories.json"
+
+      expect(json["categories"]).to eq(%w[x])
+      expect(json["pagination"]).to include("count" => 2, "pages" => 2)
+    end
   end
 
   describe ".rescue_pagination_errors" do

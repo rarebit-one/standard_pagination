@@ -71,6 +71,10 @@ module StandardPagination
       config = StandardPagination.config
       tiebreak = config.tiebreak if tiebreak.nil?
       collection = StableOrder.apply(collection) if tiebreak
+      # pagy counts the underlying rows, not an inline DISTINCT's result set.
+      if paginator == :offset && !options.key?(:count) && StableOrder.inline_distinct?(collection)
+        options[:count] = Mcp.count(collection)
+      end
 
       pagy(
         paginator,
