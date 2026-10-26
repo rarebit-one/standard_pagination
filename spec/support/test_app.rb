@@ -62,6 +62,15 @@ class WidgetsController < ActionController::Base
     render json: { names:, pagination: pagination_data(pagy) }
   end
 
+  def feed
+    pagy, widgets = paginate_cursor(Widget.order(rank: :desc), limit: 2)
+
+    respond_to do |format|
+      format.html { render plain: widgets.map(&:name).join(","), headers: { "X-Cursor" => cursor_data(pagy).to_json } }
+      format.json { render json: { data: widgets.map(&:name), **cursor_data(pagy) } }
+    end
+  end
+
   private
 
   def client_limit_option
@@ -71,6 +80,11 @@ class WidgetsController < ActionController::Base
     when /\A\d+\z/ then params[:client].to_i
     end
   end
+end
+
+# An API base controller whose clients may send no JSON Accept header.
+class ApiWidgetsController < WidgetsController
+  self.pagination_client_limit = true
 end
 
 class NotFoundWidgetsController < WidgetsController
@@ -91,7 +105,9 @@ TestApp.routes.draw do
   resources :widgets, only: :index do
     get :categories, on: :collection
     get :names, on: :collection
+    get :feed, on: :collection
   end
+  resources :api_widgets, only: :index
   resources :not_found_widgets, only: :index
   resources :custom_widgets, only: :index
 end

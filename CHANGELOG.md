@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-26
+
+### Added
+- `Controller#paginate_cursor` and `#cursor_data`: keyset (cursor) pagination for feeds, with one envelope, `{ data, next_cursor, has_more }`. The client sends `next_cursor` back as `?cursor=` (`config.cursor_key`). The primary key is appended so the order is total, and a cursor the server didn't issue is a 400 for JSON, or a redirect without it for HTML. This is the estate convention for new feeds. sidekick-web, jumpdrive and the rest had each hand-rolled their own (`has_more`/`before`/`next_page_token`, `next_cursor`, `since`).
+- `config.client_limit_formats = :non_html` lets every request whose format isn't HTML choose the page size.
+- `pagination_client_limit`, a class attribute that sets the `client_limit:` default for a controller and its subclasses. Set it on an API base controller: a client that sends no JSON `Accept` header is treated as HTML by Rails, so neither the JSON default nor `:non_html` would let it choose a page size. sidekick-web's sandbox endpoint passed `client_limit: true` per call for this reason.
+
 ## [0.1.2] - 2026-10-26
 
 ### Added

@@ -46,7 +46,8 @@ StandardPagination.configure do |c|
   c.default_limit = 20            # rows when a call site passes no limit:
   c.max_limit = 100               # cap on a client-chosen page size
   c.limit_key = "limit"           # param a client sets it with; an Array accepts aliases, e.g. %w[limit per_page]
-  c.client_limit_formats = %i[json]
+  c.client_limit_formats = %i[json] # or :non_html for every non-HTML request
+  c.cursor_key = "cursor"         # param paginate_cursor reads the cursor from
   c.tiebreak = true
   c.raise_range_error = true
   c.strict_options = nil          # nil = raise in dev/test, log elsewhere
@@ -69,7 +70,18 @@ render inertia: "factory/devices/index", props: {
 `paginate` options:
 
 - `limit:` is the page size. It defaults to `config.default_limit`.
-- `client_limit:` lets the request set the page size through `config.limit_key`. Pass an Integer cap, `true` for `config.max_limit`, or `false` to turn it off. It defaults to on for JSON and off for HTML. A request value that is junk, zero or negative falls back to `limit:`.
+- `client_limit:` lets the request set the page size through `config.limit_key`. Pass an Integer cap, `true` for `config.max_limit`, or `false` to turn it off. A request value that is junk, zero or negative falls back to `limit:`. When omitted it falls back to:
+  1. the controller's `pagination_client_limit`, if set;
+  2. otherwise `config.client_limit_formats`: on for JSON and off for HTML by default.
+
+An API base controller whose clients may send no `Accept: application/json` header (Rails treats those requests as HTML) should opt in once, instead of per call:
+
+```ruby
+class Api::BaseController < ActionController::API
+  include StandardPagination::Controller
+  self.pagination_client_limit = true   # or an Integer cap
+end
+```
 - `tiebreak:` defaults to `config.tiebreak`.
 - `paginator:` defaults to `:offset`. `:countless` skips the `COUNT(*)` on big append-only tables. Any other pagy option, such as `page_key:` or `count:`, passes through.
 
@@ -111,6 +123,29 @@ An unordered relation gets `ORDER BY id ASC`. The relation is left alone when th
 
 Outside a paginator (a query object, or an engine scope a host will page through), use `Model.stable_order(...)`, for example `AuditLog.where(...).stable_order(occurred_at: :desc)`.
 
+## Cursor pagination
+
+For feeds and append-heavy APIs, `paginate_cursor` uses pagy's keyset paginator: no `COUNT`, no `OFFSET`, and rows inserted while a client pages don't shift or repeat what it sees.
+
+```ruby
+pagy, events = paginate_cursor(Event.where(device:).order(occurred_at: :desc), limit: 50)
+
+render json: { data: events.map { EventSerializer.new(_1) }, **cursor_data(pagy) }
+```
+
+This is the one envelope for cursor-paged responses:
+
+```json
+{ "data": [...], "next_cursor": "eyJ...", "has_more": true }
+```
+
+- The client sends `next_cursor` back as `?cursor=` (`config.cursor_key`). `next_cursor` is `null` and `has_more` is `false` on the last page.
+- Order the set with hash or symbol orders (`order(occurred_at: :desc)`), not SQL strings: pagy builds the cursor from those columns. The primary key is appended so the order is total.
+- `limit:`, `client_limit:` and `tiebreak:` work as in `paginate`.
+- A cursor the server didn't issue raises `Pagy::OptionError`: `rescue_pagination_errors` answers 400 for JSON, and for HTML redirects without the cursor.
+
+Use it for new feeds, and when an existing feed is reworked. Feeds that mobile clients already parse keep their current shape until their clients move.
+
 ## MCP tools
 
 ```ruby
@@ -122,10 +157,10 @@ end
 
 It returns `[records, { page:, per_page:, total_count:, total_pages: }]`, the shape MCP clients already parse. A `GROUP BY` relation counts its groups, and a page past the end returns no records.
 
-## Not in 0.1
+## Not in the gem
 
-- **Keyset or cursor pagination for feeds and APIs.** Today these are hand-rolled in sidekick-web's companion queries and in jumpdrive. 0.2 is meant to settle on a single `next_cursor` / `has_more` envelope.
 - **A shared React `<Pagination>` component.** It belongs in a frontend package, not a gem.
+- **Cursor pagination for MCP list tools.** `Mcp.paginate` keeps the offset shape MCP clients already parse.
 
 ## Development
 

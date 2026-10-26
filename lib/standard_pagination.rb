@@ -38,6 +38,13 @@ module StandardPagination
       pagy.data_hash(data_keys: DATA_KEYS)
     end
 
+    # The one cursor envelope for feeds, alongside the records as `data`:
+    # `{ next_cursor: "<opaque>" | nil, has_more: true | false }`.
+    def cursor_data(pagy)
+      next_cursor = pagy.next
+      { next_cursor:, has_more: !next_cursor.nil? }
+    end
+
     # Global pagy client-limit options left over from before this gem. They
     # still apply to any bare `pagy(...)` call that bypasses
     # Controller#paginate, letting clients pick the page size.
