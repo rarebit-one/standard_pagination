@@ -113,6 +113,84 @@ RSpec.describe StandardPagination::Controller do
     end
   end
 
+  describe "client limits" do
+    it "with client_limit_formats = :non_html, lets a */* request choose the page size" do
+      StandardPagination.config.client_limit_formats = :non_html
+      header "Accept", "*/*"
+      get "/widgets", limit: 5
+
+      expect(last_response.body.split(",").size).to eq(5)
+    end
+
+    it "with client_limit_formats = :non_html, still ignores it on HTML pages" do
+      StandardPagination.config.client_limit_formats = :non_html
+      header "Accept", "text/html"
+      get "/widgets", limit: 5
+
+      expect(last_response.body.split(",").size).to eq(2)
+    end
+
+    it "honours the page size on every request when the controller sets pagination_client_limit" do
+      # No Accept header at all: Rails treats the request as HTML.
+      get "/api_widgets", limit: 5
+
+      expect(last_response.body.split(",").size).to eq(5)
+    end
+
+    it "scopes pagination_client_limit to the controller that sets it" do
+      expect(ApiWidgetsController.pagination_client_limit).to be(true)
+      expect(WidgetsController.pagination_client_limit).to be_nil
+    end
+  end
+
+  describe "#paginate_cursor" do
+    def feed_page(cursor = nil, **params)
+      get "/widgets/feed.json", cursor ? params.merge(cursor:) : params
+      json
+    end
+
+    it "pages through the feed in order with the cursor envelope" do
+      seen = []
+      page = feed_page
+      loop do
+        seen.concat(page["data"])
+        break unless page["has_more"]
+
+        page = feed_page(page["next_cursor"])
+      end
+
+      expect(seen).to eq(%w[g f e d c b a])
+      expect(page).to include("has_more" => false, "next_cursor" => nil)
+    end
+
+    it "doesn't shift when rows are inserted between pages" do
+      first = feed_page
+      Widget.create!(name: "new", rank: 99)
+      second = feed_page(first["next_cursor"])
+
+      expect(first["data"]).to eq(%w[g f])
+      expect(second["data"]).to eq(%w[e d])
+    end
+
+    it "honours a JSON client's page size" do
+      expect(feed_page(limit: 3)["data"]).to eq(%w[g f e])
+    end
+
+    it "answers a cursor it didn't issue with a 400" do
+      get "/widgets/feed.json", cursor: "not-a-cursor"
+
+      expect(last_response.status).to eq(400)
+      expect(json).to include("error" => "Invalid pagination parameters", "last_page" => nil)
+    end
+
+    it "redirects an HTML request with a bad cursor to the feed without it" do
+      get "/widgets/feed", cursor: "not-a-cursor", q: "x"
+
+      expect(last_response.status).to eq(302)
+      expect(last_response.location).to end_with("/widgets/feed?q=x")
+    end
+  end
+
   describe ".rescue_pagination_errors" do
     it "redirects an out-of-range HTML page to the last page, keeping filters" do
       get "/widgets", page: 99, q: "x"

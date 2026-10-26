@@ -19,6 +19,13 @@ module StandardPagination
       include Pagy::Method
 
       class_attribute :_pagination_error_handling, instance_accessor: false, default: nil
+      # The `client_limit:` default for every `paginate`/`paginate_cursor` in
+      # this controller and its subclasses (true, an Integer cap, or false).
+      # nil falls back to config.client_limit_formats. Set it on an API base
+      # controller, whose clients may send no JSON Accept header at all:
+      #
+      #   self.pagination_client_limit = true
+      class_attribute :pagination_client_limit, instance_accessor: false, default: nil
     end
 
     class_methods do
@@ -92,6 +99,49 @@ module StandardPagination
       StandardPagination.data(pagy)
     end
 
+    # Cursor (keyset) pagination for feeds: no COUNT, no OFFSET, and rows
+    # inserted while a client pages don't shift what it sees. Returns
+    # `[pagy, records]`; send `cursor_data(pagy)` with the records.
+    #
+    # The set must be ordered with hash/symbol orders (`order(created_at:
+    # :desc)`), which pagy turns into the cursor's columns; the primary key
+    # is appended as a tie-breaker so the order is total. The client sends
+    # back `next_cursor` as config.cursor_key (`?cursor=`). `limit:`,
+    # `client_limit:` and `tiebreak:` work as in `paginate`.
+    #
+    # A cursor this didn't issue raises Pagy::OptionError, which
+    # rescue_pagination_errors answers with a 400 (or, for HTML, a redirect
+    # without it).
+    def paginate_cursor(set, limit: nil, client_limit: nil, tiebreak: nil, **options)
+      config = StandardPagination.config
+      tiebreak = config.tiebreak if tiebreak.nil?
+      set = StableOrder.apply(set) if tiebreak
+
+      cursor = params[config.cursor_key]
+      if cursor.present? && !(cursor.is_a?(String) && Pagy::Keyset.decode(cursor).is_a?(Array))
+        raise Pagy::OptionError.new(nil, config.cursor_key.to_sym, "to be a next_cursor value", cursor)
+      end
+
+      pagy(
+        :keyset,
+        set,
+        **options,
+        page_key: config.cursor_key.to_s,
+        limit: resolve_pagination_limit(limit || config.default_limit, client_limit),
+        max_limit: nil,
+        client_limit: nil,
+        client_max_limit: nil
+      )
+    end
+
+    # The cursor envelope's metadata: `{ next_cursor:, has_more: }`.
+    # `next_cursor` is nil on the last page.
+    #
+    #   render json: { data: ..., **cursor_data(pagy) }
+    def cursor_data(pagy)
+      StandardPagination.cursor_data(pagy)
+    end
+
     def resolve_pagination_limit(limit, client_limit)
       cap = pagination_client_limit_cap(client_limit)
       return limit unless cap
@@ -109,6 +159,7 @@ module StandardPagination
     end
 
     def pagination_client_limit_cap(client_limit)
+      client_limit = self.class.pagination_client_limit if client_limit.nil?
       client_limit = pagination_client_limit_format? if client_limit.nil?
 
       case client_limit
@@ -119,7 +170,9 @@ module StandardPagination
 
     def pagination_client_limit_format?
       formats = StandardPagination.config.client_limit_formats
-      formats.any? { |format| request.format.public_send(:"#{format}?") }
+      return !request.format&.html? if formats == :non_html
+
+      Array(formats).any? { |format| request.format.public_send(:"#{format}?") }
     end
 
     def handle_pagination_error(exception)
@@ -150,7 +203,10 @@ module StandardPagination
       if last_page
         query[page_key] = last_page
       else
-        query = query.except((options[:limit_key] || Pagy::DEFAULT[:limit_key]).to_s, *pagination_limit_keys)
+        query = query.except(
+          (options[:limit_key] || Pagy::DEFAULT[:limit_key]).to_s, *pagination_limit_keys,
+          StandardPagination.config.cursor_key.to_s
+        )
         # Nothing left to drop: the bad option came from the call site or a
         # param this gem doesn't know, so redirecting would only repeat it.
         return head(:bad_request) if query == original
