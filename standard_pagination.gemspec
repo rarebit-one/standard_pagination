@@ -3,7 +3,7 @@ require_relative "lib/standard_pagination/version"
 Gem::Specification.new do |spec|
   spec.name        = "standard_pagination"
   spec.version     = StandardPagination::VERSION
-  spec.authors     = [ "Jaryl Sim" ]
+  spec.authors     = [ "Rarebit One" ]
   spec.email       = [ "code@jaryl.dev" ]
   spec.homepage    = "https://github.com/rarebit-one/standard_pagination"
   spec.summary     = "Shared pagination conventions for Rails apps, built on pagy."
